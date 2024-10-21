@@ -1,5 +1,6 @@
 import rospy
 from geometry_msgs.msg import Twist, Pose
+import numpy as np
 
 class PositionSubscriber:
     def __init__(self):
@@ -17,7 +18,7 @@ class PositionSubscriber:
         position = data.position
         rotation = data.orientation
 
-        print(position)
+        # print(position)
 
         self.pos = {'x': position.x,
                     'y': position.y,
@@ -40,7 +41,7 @@ class PositionSubscriber:
     
     def get_rotation_vec(self):
         return [self.ext_pos['rx'], self.ext_pos['ry'], self.ext_pos['rz'], self.ext_pos['w']]
-    
+                
 
 class SpeedPublisher:
     def __init__(self):
@@ -57,7 +58,7 @@ class SpeedPublisher:
         val_to_send.angular.y = ry if ry else 0.0
         val_to_send.angular.z = rz if rz else 0.0
 
-        # rospy.loginfo(val_to_send)
+        rospy.loginfo(val_to_send)
         self.pub.publish(val_to_send)
 
     def stop(self):
@@ -68,9 +69,49 @@ class PositionController:
         self.pos_sub = PositionSubscriber()
         self.speed_pub = SpeedPublisher()
         self.in_destination = False
+        self.finished_rotating = False
+
+    def update_speed(self, x_speed=None, y_speed=None, z_speed=None):
+        current_pos = self.pos_sub.get_ext_pos_dict()
+
+        current_rx = current_pos['rx']
+        current_ry = current_pos['ry']
+        current_rz = current_pos['rz']
+
+        x_speed_new = x_speed * np.cos(current_rz) - y_speed * np.sin(current_rz)
+        y_speed_new = x_speed * np.sin(current_rz) + y_speed * np.cos(current_rz)
+        z_speed_new = z_speed
+
+        self.speed_pub.update_speed(x=x_speed_new, y=y_speed_new , z=z_speed_new)
+
 
     def fly_to_vec(self, vec):
         self.fly_to(vec[0], vec[1], vec[2])
+
+    def rotate(self, rx=None, ry=None, rz=None):
+        pos_dict = self.pos_sub.get_pos_dict()
+        current_x = pos_dict['rx']
+        current_y = pos_dict['ry']
+        current_z = pos_dict['rz']
+
+        x_diff = rx - current_x if rx else 0
+        y_diff = ry - current_y if ry else 0
+        z_diff = rz - current_z if rz else 0
+
+        tolerance = 0.05
+        if abs(x_diff) < tolerance and abs(y_diff) < tolerance and abs(z_diff) < tolerance:
+            self.finished_rotating = True
+        else:
+            self.finished_rotating = False
+
+        k = 0.2
+        x_speed = x_diff * k
+        y_speed = y_diff * k
+        z_speed = z_diff * k
+
+        # print(f"cur_z {current_z}, set_z {rz}, diff {z_diff}, speed {z_speed}")
+
+        self.speed_pub.update_speed(rx=x_speed, ry=y_speed, rz=z_speed)
 
     def fly_to(self, x=None, y=None, z=None):
         pos_dict = self.pos_sub.get_pos_dict()
@@ -82,7 +123,8 @@ class PositionController:
         y_diff = y - current_y
         z_diff = z - current_z
 
-        if abs(x_diff) < 0.3 and abs(y_diff) < 0.3 and abs(z_diff) < 0.3:
+        tolerance = 1
+        if abs(x_diff) < tolerance and abs(y_diff) < tolerance and abs(z_diff) < tolerance:
             self.in_destination = True
         else:
             self.in_destination = False
@@ -92,7 +134,7 @@ class PositionController:
         y_speed = y_diff * k
         z_speed = z_diff * k
 
-        self.speed_pub.update_speed(x_speed, y_speed, z_speed, 0, 0, 0)
+        self.update_speed(x_speed, y_speed, z_speed)
 
     def stop(self):
         self.speed_pub.stop()
@@ -101,52 +143,38 @@ class PositionController:
 if __name__ == '__main__':
     try:
         rospy.init_node('iris_node', anonymous=True)
-        # speed_pub = SpeedPublisher()
-        # pos_sub = PositionSubscriber()
-        controller = PositionController()
 
+        controller = PositionController()
         rate = rospy.Rate(10) # 10hz
 
-        points = [(0, 0, 5),
-                  (10, 0, 5),
-                  (10, 10, 5),
-                  (0, 10, 5),
-                  (0, 0, 5)]
+        # points = [(0, 0, 5),
+        #           (10, 0, 5),
+        #           (10, 10, 5),
+        #           (0, 10, 5),
+        #           (0, 0, 5)]
         
-        points_iter = iter(points)
+        # points_iter = iter(points)
 
-        current_point = points[0]
+        # current_point = points[0]
         while not rospy.is_shutdown():
-            if controller.in_destination:
-                current_point = next(points_iter)
 
-            controller.fly_to_vec(current_point)
+            if not controller.finished_rotating:
+                print(controller.finished_rotating)
+                controller.rotate(rz=1)
+            
+            if controller.finished_rotating:
+                controller.update_speed(0.8, 0, 0)
+
+
+                # if controller.in_destination:
+                #     current_point = next(points_iter)
+                # controller.fly_to_vec(current_point)
+
+
+            
             
             rate.sleep()
     except rospy.ROSInterruptException:
         pass
-
-
-# if __name__ == '__main__':
-#     try:
-#         speed_pub = SpeedPublisher()
-#         rate = rospy.Rate(10) # 10hz
-#         i = 0
-#         while not rospy.is_shutdown():
-            
-#             if i < 50:
-#                 speed_pub.update_speed(x=1)
-#             elif i < 100:
-#                 speed_pub.update_speed(y=1)
-#             elif i < 150:
-#                 speed_pub.update_speed(x=-1)
-#             elif i < 200:
-#                 speed_pub.update_speed(y=-1) 
-            
-#             if i > 200:
-#                 i = 0
-
-#             i = i + 1        
-#             rate.sleep()
-#     except rospy.ROSInterruptException:
-#         pass
+    except StopIteration:
+        controller.stop()
