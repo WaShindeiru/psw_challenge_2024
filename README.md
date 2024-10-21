@@ -80,3 +80,10 @@ Oprócz tego, model Iris UAV zapewnia strumień wideo z kamery zamontowanej na d
 
 - `/iris/usb_cam/camera_info` ([sensor_msgs/CameraInfo](http://docs.ros.org/en/noetic/api/sensor_msgs/html/msg/CameraInfo.html)) - parametry kamery,
 - `/iris/usb_cam/image_raw` ([sensor_msgs/Image](http://docs.ros.org/en/noetic/api/sensor_msgs/html/msg/Image.html)) - obraz RGB.
+
+
+### Opis toru
+
+Tor, przez który należy przelecieć, składa się z jednakowych bramek oznakowanych markerami ArUco.
+Znaczniki zostały przygotowane z wykorzystaniem [generatora](https://chev.me/arucogen/) ze słownika 4x4(50, 100, 250, 1000).
+Markery kodują kolejne liczby 1, 2, ..., 5, które oznaczają numery bramek (należy przez nie przelecieć w zadanej kolejności).
