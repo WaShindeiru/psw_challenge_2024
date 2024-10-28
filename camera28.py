@@ -13,6 +13,7 @@ class CameraSubscriber:
 
     def new_image_callback(self, img_data):
         self.img = cv2.flip(np.asarray(cv2.cvtColor(self.bridge.imgmsg_to_cv2(img_data), cv2.COLOR_BGR2GRAY)),-1)
+        
 
 class ArucoDetection:
     def __init__(self):
@@ -20,12 +21,13 @@ class ArucoDetection:
         self.this_aruco_parameters = cv2.aruco.DetectorParameters_create()
 
     def detect(self, frame):
+        _, frame = cv2.threshold(frame, 100,255, cv2.THRESH_BINARY)
         (corners, ids, rejected) = cv2.aruco.detectMarkers(
         frame, self.this_aruco_dictionary, parameters=self.this_aruco_parameters)
         print(ids)
 
         frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
-
+       
         x,y,z = frame.shape
         cv2.circle(frame, (y//2, x//2), 3, (255,0,0), 2)
 
@@ -53,7 +55,7 @@ class ArucoDetection:
 
                 calculated_distance = aruco_size_px/default_aruco_size_px
 
-                center_gate_default_px = 120
+                center_gate_default_px = 110
 
                 # Our desired destination
                 cv2.circle(frame, (int(top_left[0]-calculated_distance*center_gate_default_px), int(top_left[1]-calculated_distance*center_gate_default_px)), 3, (0, 255, 0), 2)
