@@ -1,6 +1,32 @@
 import rospy
 from geometry_msgs.msg import Twist, Pose
 import numpy as np
+import time
+
+
+
+def quaternion2euler(qx, qy, qz, qw):
+    rx = np.arctan2(qw*qx + qy*qz, 1-2*(qx**2+qy**2))
+    ry = -(np.pi/2) + 2*np.arctan2(np.sqrt(1+2*(qw*qy-qx*qz)), np.sqrt(1-2*(qw*qy-qx*qz)))
+    rz = np.arctan2(2*(qw*qz + qx*qy), 1-2*(qy**2+qz**2))
+    return (rx, ry, rz)
+
+
+def euler2quaternion(rx, ry, rz):
+    cr = np.cos(rx * 0.5)
+    sr = np.sin(rx * 0.5)
+    cp = np.cos(ry * 0.5)
+    sp = np.sin(ry * 0.5)
+    cy = np.cos(rz * 0.5)
+    sy = np.sin(rz * 0.5)
+
+    qw = cr * cp * cy + sr * sp * sy
+    qx = sr * cp * cy - cr * sp * sy
+    qy = cr * sp * cy + sr * cp * sy
+    qz = cr * cp * sy - sr * sp * cy
+    
+    return (qx, qy, qz, qw)
+
 
 class PositionSubscriber:
     def __init__(self):
@@ -17,8 +43,6 @@ class PositionSubscriber:
     def _update_pos(self, data):
         position = data.position
         rotation = data.orientation
-
-        # print(position)
 
         self.pos = {'x': position.x,
                     'y': position.y,
@@ -58,7 +82,6 @@ class SpeedPublisher:
         val_to_send.angular.y = ry if ry else 0.0
         val_to_send.angular.z = rz if rz else 0.0
 
-        rospy.loginfo(val_to_send)
         self.pub.publish(val_to_send)
 
     def stop(self):
@@ -71,6 +94,12 @@ class PositionController:
         self.in_destination = False
         self.finished_rotating = False
 
+    def print_rot(self):
+        current_pos = self.pos_sub.get_ext_pos_dict()
+        current_euler = quaternion2euler(current_pos['rx'], current_pos['ry'], current_pos['rz'], current_pos['w'])
+        current_euler = [round(euler, 2) for euler in current_euler]
+        print(f"current euler rot: {current_euler}")
+
     def update_speed(self, x_speed=None, y_speed=None, z_speed=None):
         current_pos = self.pos_sub.get_ext_pos_dict()
 
@@ -78,8 +107,11 @@ class PositionController:
         current_ry = current_pos['ry']
         current_rz = current_pos['rz']
 
-        x_speed_new = x_speed * np.cos(current_rz) - y_speed * np.sin(current_rz)
-        y_speed_new = x_speed * np.sin(current_rz) + y_speed * np.cos(current_rz)
+        # x_speed_new = x_speed * np.cos(current_rz) - y_speed * np.sin(current_rz)
+        # y_speed_new = x_speed * np.sin(current_rz) + y_speed * np.cos(current_rz)
+        # ???
+        x_speed_new = x_speed
+        y_speed_new = x_speed
         z_speed_new = z_speed
 
         self.speed_pub.update_speed(x=x_speed_new, y=y_speed_new , z=z_speed_new)
@@ -88,31 +120,42 @@ class PositionController:
     def fly_to_vec(self, vec):
         self.fly_to(vec[0], vec[1], vec[2])
 
-    def rotate(self, rx=None, ry=None, rz=None):
-        pos_dict = self.pos_sub.get_pos_dict()
-        current_x = pos_dict['rx']
-        current_y = pos_dict['ry']
-        current_z = pos_dict['rz']
+    def rotate(self, rx, ry, rz):
+        pos_dict = self.pos_sub.get_ext_pos_dict()
+        current_qx = pos_dict['rx']
+        current_qy = pos_dict['ry']
+        current_qz = pos_dict['rz']
+        current_qw = pos_dict['w']
 
-        x_diff = rx - current_x if rx else 0
-        y_diff = ry - current_y if ry else 0
-        z_diff = rz - current_z if rz else 0
+        current_euler = quaternion2euler(current_qx, current_qy, current_qz, current_qw)
+        current_euler = [round(euler, 2) for euler in current_euler]
+        print(f"current euler rot: {current_euler}")
 
-        tolerance = 0.05
-        if abs(x_diff) < tolerance and abs(y_diff) < tolerance and abs(z_diff) < tolerance:
+        desired_quaternion = euler2quaternion(rx, ry, rz)
+
+        x_diff = desired_quaternion[0] - current_qx 
+        y_diff = desired_quaternion[1] - current_qy 
+        z_diff = desired_quaternion[2] - current_qz 
+        w_diff = desired_quaternion[3] - current_qw 
+
+        euler_diffs = quaternion2euler(x_diff, y_diff, z_diff, w_diff)
+        euler_diffs = [euler if abs(euler) < 3.12 else 0 for euler in euler_diffs ]
+        print(f"euler diffs: {euler_diffs}")
+
+        tolerance = 0.2
+        if abs(euler_diffs[0]) < tolerance and abs(euler_diffs[1]) < tolerance and abs(euler_diffs[2]) < tolerance:
             self.finished_rotating = True
         else:
             self.finished_rotating = False
 
         k = 0.2
-        x_speed = x_diff * k
-        y_speed = y_diff * k
-        z_speed = z_diff * k
-
-        # print(f"cur_z {current_z}, set_z {rz}, diff {z_diff}, speed {z_speed}")
+        x_speed = euler_diffs[0] * k
+        y_speed = euler_diffs[1] * k
+        z_speed = euler_diffs[2] * k
 
         self.speed_pub.update_speed(rx=x_speed, ry=y_speed, rz=z_speed)
 
+    # fly me to the moon
     def fly_to(self, x=None, y=None, z=None):
         pos_dict = self.pos_sub.get_pos_dict()
         current_x = pos_dict['x']
@@ -156,23 +199,21 @@ if __name__ == '__main__':
         # points_iter = iter(points)
 
         # current_point = points[0]
+
+        time.sleep(1)
+
         while not rospy.is_shutdown():
 
             if not controller.finished_rotating:
-                print(controller.finished_rotating)
-                controller.rotate(rz=1)
+                controller.rotate(rx=0, ry=0, rz=0)
             
             if controller.finished_rotating:
-                controller.update_speed(0.8, 0, 0)
-
-
+                print("finished")
+                controller.print_rot()
+                controller.update_speed(0, 0, 0)
                 # if controller.in_destination:
                 #     current_point = next(points_iter)
                 # controller.fly_to_vec(current_point)
-
-
-            
-            
             rate.sleep()
     except rospy.ROSInterruptException:
         pass
