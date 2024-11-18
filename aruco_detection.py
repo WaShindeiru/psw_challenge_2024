@@ -41,7 +41,7 @@ class ArucoDetection:
         if len(corners) > 0:
             # Flatten the ArUco IDs list
             ids = ids.flatten()
-            markers = {}
+            self.markers = {}
             
             # Loop over the detected ArUco corners
             for (marker_corner, marker_id) in zip(corners, ids):
@@ -148,6 +148,7 @@ class ArucoDetection:
             
         cv2.imshow("y",frame)
         cv2.waitKey(1)
+        # return int(top_left[0]-calculated_distance), int(top_left[1]-calculated_distance)
         
 if __name__ == '__main__':
     rospy.init_node('iris_node', anonymous=True)
