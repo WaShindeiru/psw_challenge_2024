@@ -106,14 +106,14 @@ class PositionController:
         else:
             self.finished_rotating = False
 
-        kz = 0.5
+        kz = 2.5
         new_z_speed = z_diff * kz
-        kr = 0.2
+        kr = 3
         new_z_rot_speed = rot_diff * kr
         self.speed_pub.update_speed([-direction[0], direction[1], new_z_speed], [0, 0, new_z_rot_speed])
 
     # fly me to the moon
-    def fly_to(self, point, euler_rot_vector):
+    def fly_to(self, point, euler_rot_vector, k=0.2):
         current_pos = self.pos_sub.get_pos()
         current_euler_rot = self.pos_sub.get_rot_euler()
         current_z_rot = current_euler_rot[2]
@@ -140,7 +140,7 @@ class PositionController:
         else:
             self.in_destination = False
 
-        k = 0.2
+        #k = 0.2
         speeds = [new_x_diff * k, new_y_diff * k, new_z_diff * k]
 
         #rotation part
@@ -157,7 +157,7 @@ class PositionController:
         else:
             self.finished_rotating = False
 
-        k = 0.2
+        #k = 0.2
         new_rot_speeds = diff * k
 
         self.speed_pub.update_speed(speeds, new_rot_speeds)
