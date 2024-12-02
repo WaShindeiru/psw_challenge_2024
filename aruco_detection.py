@@ -143,7 +143,8 @@ class ArucoDetection:
 
                     cv2.aruco.drawAxis(frame, self.camera_matrix, self.distortion_coefficients, rvecs, moved_point, 0.05)
                     '''
-
+        else :
+            self.markers = {}
 
             
         cv2.imshow("y",frame)
